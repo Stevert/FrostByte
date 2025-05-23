@@ -1,0 +1,12 @@
+pyarrow
+ray
+duckdb
+flask
+pyyaml
+pyiceberg[glue,hive,sqlite]
+pyspark
+daft
+sqlparse
+streamlit
+plotly
+pandas

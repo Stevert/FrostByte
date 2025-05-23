@@ -1,0 +1,20 @@
+version: '3'
+services:
+  flight-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.flight
+    ports:
+      - "8815:8815"
+
+  query-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.query
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    ports:
+      - "5005:5005"

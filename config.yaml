@@ -1,0 +1,8 @@
+storage: s3
+query_engine: duckdb
+result_path: /tmp/results
+catalog:
+  type: "sql"
+  uri: "sqlite:///C:/Users/steve/PycharmProjects/FrostByte/warehouse/testing.db"
+  warehouse: "file://C:/Users/steve/PycharmProjects/FrostByte/warehouse"
+  catalog_name: "iceberg_catalog"

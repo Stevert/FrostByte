@@ -1,0 +1,13 @@
+Create a minimal viable app with the following requirements
+1. The app should be written in python
+2. It consists of a arrow flight server to execute operations (create, insert, select, merge,update, etc) on Apache iceberg.
+3. It should support multiple data catalogs such as AWs Glue, hive, local, sqlite, etc.
+4. The data storge used can be local, sqlite, aws S3, hdfs, etc.
+5. It should also support multiple query engines like spark, duckdb, daft, etc
+6. flight server should delegate requests to a query engine. The query engine should load balanced and if possible support parallel distributed processing. for. eg, a query can be divided into small parts and processed by multiple duckdb instances.
+7. The query engine should store result of queries  in the user specified  storage type in apache arrow format. The query engine should then return the result paths to the filght server which in turn returns the arrow format from those paths
+8. Support a configuration format like yaml to accept user config.
+9. open source libraries can be used to simplify code
+10. an mcp agentic server to query data using a llm and support either tabular or graphical representation of the query (open source project: dataherald)
+10. query engine,  flight server and mcp server should run as independent processes
+
