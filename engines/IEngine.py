@@ -5,6 +5,7 @@ from typing import List, Optional, Union
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
+from pyiceberg.table import Table
 from pyiceberg.types import (
     LongType,
     NestedField,
@@ -14,8 +15,6 @@ from pyiceberg.types import (
     DoubleType,
     FloatType,
 )
-
-TABLE_NAMESPACE = "default"
 
 # Set up logging
 logging.basicConfig(
@@ -27,13 +26,15 @@ logger = logging.getLogger("__name__")
 class IEngine(ABC):
     def __init__(self, config: dict):
         self.catalog_params: dict = config.get("catalog", {})
+        self.warehouse_path = self.catalog_params.get("warehouse", "./tmp/iceberg")
         self.catalog_name = self.catalog_params.get("catalog_name", "default")
         self.catalog = load_catalog(self.catalog_name, **self.catalog_params)
+        self.database = self.catalog_params.get("database_name", "default")
 
         namespaces = [ns[0] for ns in self.catalog.list_namespaces()]
 
-        if TABLE_NAMESPACE not in namespaces:
-            self.catalog.create_namespace(TABLE_NAMESPACE)
+        if self.database not in namespaces:
+            self.catalog.create_namespace(self.database)
 
         self.initialize_engine()
         self.sync_views()
@@ -58,8 +59,16 @@ class IEngine(ABC):
     def tables(self) -> List[str]:
         """Get list of all tables in the namespace."""
         return [
-            tbl_id[1] for tbl_id in self.catalog.list_tables((TABLE_NAMESPACE,))
+            tbl_id[1] for tbl_id in self.catalog.list_tables((self.database,))
         ]
+
+    @abstractmethod
+    def get_schema(self, query):
+        pass
+
+    @abstractmethod
+    def query_and_write(self, sql: str, result_dir: str) -> List[str]:
+        pass
 
     def _convert_pyarrow_to_iceberg_type(
             self, pa_type
@@ -82,9 +91,14 @@ class IEngine(ABC):
             logger.warning(f"Unsupported type: {pa_type}, defaulting to StringType")
             return StringType()
 
+    def get_table(self, table_name) -> Table:
+        logger.info(self.catalog.list_tables(self.database))
+        logger.info(table_name)
+        return self.catalog.load_table(self.get_full_table_name(table_name))
+
     def create_table(self, table_name: str, data: pa.Table) -> bool:
         """Create a new Iceberg table from PyArrow table."""
-        full_table_name = f"{TABLE_NAMESPACE}.{table_name}"
+        full_table_name = self.get_full_table_name(table_name)
 
         if self.catalog.table_exists(full_table_name):
             logger.info(f"Table {full_table_name} already exists")
@@ -114,7 +128,7 @@ class IEngine(ABC):
 
     def insert(self, table_name: str, data: pa.Table) -> bool:
         """Insert data into an existing Iceberg table."""
-        full_table_name = f"{TABLE_NAMESPACE}.{table_name}"
+        full_table_name = self.get_full_table_name(table_name)
 
         try:
             iceberg_table = self.catalog.load_table(full_table_name)
@@ -131,7 +145,7 @@ class IEngine(ABC):
 
     def get_current_snapshot_id(self, table_name: str) -> Optional[int]:
         """Get the current snapshot ID for a table if it exists."""
-        full_table_name = f"{TABLE_NAMESPACE}.{table_name}"
+        full_table_name = self.get_full_table_name(table_name)
 
         try:
             if self.catalog.table_exists(full_table_name):
@@ -150,3 +164,8 @@ class IEngine(ABC):
     ) -> Optional[pa.Table]:
         """Get changes since the specified snapshot ID."""
         pass
+
+    def get_full_table_name(self, table_name) -> str:
+        if self.database not in table_name:
+            return f"{self.database}.{table_name}"
+        return table_name

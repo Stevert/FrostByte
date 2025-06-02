@@ -1,7 +1,8 @@
-from pyspark.sql import SparkSession
-import uuid
 import os
-from pyspark.sql.functions import col
+import uuid
+
+from pyspark.sql import SparkSession
+
 
 def execute_spark(query, storage_path):
     spark = SparkSession.builder.appName("IcebergSpark").getOrCreate()

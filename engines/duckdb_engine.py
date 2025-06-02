@@ -1,21 +1,20 @@
 import logging
-from typing import Optional
+from typing import Optional, List
 
 import duckdb
-import os
-import uuid
 import pyarrow as pa
+from pyiceberg.table import Table
 
-from engines.IEngine import IEngine, TABLE_NAMESPACE
-from utils.sql_parser import extract_table_and_partitions
+from engines.IEngine import IEngine
+from utils.file_utils import write_arrow_file
 
-logger = logging.getLogger("__name__")
+logger = logging.getLogger()
+
 
 class DuckDbEngine(IEngine):
     def __init__(self, config: dict):
-        super().__init__(config)
         self.con = duckdb.connect()
-        self.warehouse_path = config.get("warehouse")
+        super().__init__(config)
 
     def initialize_engine(self) -> None:
         """Initialize DuckDB with Iceberg extension and settings."""
@@ -30,12 +29,12 @@ class DuckDbEngine(IEngine):
 
         # Setup the iceberg extension once before reflecting views
         self.initialize_engine()
-        for table in table_names:
-            full_table_name = f"{TABLE_NAMESPACE}.{table}"
-            table_path = f"{self.warehouse_path}/{TABLE_NAMESPACE}.db/{table}"
+        for table_name in table_names:
+            full_table_name = self.get_full_table_name(table_name)
+            table_path = f"{self.warehouse_path}/{self.database}.db/{table_name}"
             self.con.execute(
                 f"""
-                        CREATE OR REPLACE VIEW {table} AS
+                        CREATE OR REPLACE VIEW {table_name} AS
                         SELECT * FROM iceberg_scan(
                             '{table_path}', 
                             version='?',
@@ -43,7 +42,7 @@ class DuckDbEngine(IEngine):
                         )
                         """
             )
-            logger.info(f"Created view: {table} for table: {full_table_name}")
+            logger.info(f"Created view: {table_name} for table: {full_table_name}")
 
     def query(self, sql_command: str) -> pa.Table:
         """Execute a SQL command and return results as PyArrow table."""
@@ -51,8 +50,16 @@ class DuckDbEngine(IEngine):
         try:
             return self.con.execute(sql_command).fetch_arrow_table()
         except Exception as e:
-            logger.error(f"Error executing SQL: {e}")
+            logger.error(f"Error executing SQL", e)
             raise
+
+    def get_schema(self, table):
+        return self.con.query(f"EXPLAIN SELECT * FROM {table}").fetch_arrow_table().schema
+
+    def query_and_write(self, sql: str, result_dir: str) -> List[str]:
+        result = self.query(sql)
+        path = write_arrow_file(result, result_dir)
+        return [path]
 
     def count(self, table_name: str) -> pa.Table:
         """Get count of rows in a table."""
@@ -66,7 +73,7 @@ class DuckDbEngine(IEngine):
 
     def get_changes_since_snapshot(self, table_name: str, snapshot_id: int) -> Optional[pa.Table]:
         """Get changes since the specified snapshot ID."""
-        full_table_name = f"{TABLE_NAMESPACE}.{table_name}"
+        full_table_name = self.get_full_table_name(table_name)
 
         try:
             if not self.catalog.table_exists(full_table_name):
@@ -98,3 +105,6 @@ class DuckDbEngine(IEngine):
                 f"Error getting changes for {table_name} since snapshot {snapshot_id}: {e}"
             )
             return None
+
+    def get_table(self, table_name) -> Table:
+        return self.con.table(table_name).fetch_arrow_table()

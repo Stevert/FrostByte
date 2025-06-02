@@ -1,12 +1,13 @@
 pyarrow
-ray
 duckdb
 flask
 pyyaml
-pyiceberg[glue,hive,sqlite]
+pyiceberg[glue,hive,sqlite,sql-sqlite]
 pyspark
 daft
 sqlparse
 streamlit
 plotly
 pandas
+cacheout
+faker
