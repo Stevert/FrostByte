@@ -4,8 +4,10 @@ from typing import List, Optional, Union
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
+from pyiceberg.partitioning import UNPARTITIONED_PARTITION_SPEC, PartitionField, PartitionSpec
 from pyiceberg.schema import Schema
 from pyiceberg.table import Table
+from pyiceberg.transforms import YearTransform, IdentityTransform
 from pyiceberg.types import (
     LongType,
     NestedField,
@@ -26,7 +28,7 @@ logger = logging.getLogger("__name__")
 class IEngine(ABC):
     def __init__(self, config: dict):
         self.catalog_params: dict = config.get("catalog", {})
-        self.warehouse_path = self.catalog_params.get("warehouse", "./tmp/iceberg")
+        self.warehouse_path = self.catalog_params.get("warehouse", "./tmp/iceberg").replace("file://","")
         self.catalog_name = self.catalog_params.get("catalog_name", "default")
         self.catalog = load_catalog(self.catalog_name, **self.catalog_params)
         self.database = self.catalog_params.get("database_name", "default")
@@ -96,7 +98,7 @@ class IEngine(ABC):
         logger.info(table_name)
         return self.catalog.load_table(self.get_full_table_name(table_name))
 
-    def create_table(self, table_name: str, data: pa.Table) -> bool:
+    def create_table(self, table_name: str, data: pa.Table, partitions: List[str]) -> bool:
         """Create a new Iceberg table from PyArrow table."""
         full_table_name = self.get_full_table_name(table_name)
 
@@ -105,6 +107,7 @@ class IEngine(ABC):
             return True
 
         fields = []
+        partition_fields = []
         for i, field in enumerate(data.schema, 1):
             iceberg_type = self._convert_pyarrow_to_iceberg_type(field.type)
             fields.append(
@@ -115,11 +118,18 @@ class IEngine(ABC):
                     required=False,
                 )
             )
+            if field.name in partitions:
+                partition_fields.append(
+                    PartitionField(field_id=i, source_id=i, transform=IdentityTransform(), name=field.name)
+                )
+
 
         schema = Schema(*fields)
+        partition_spec =  PartitionSpec(*partition_fields) if partition_fields else UNPARTITIONED_PARTITION_SPEC
         iceberg_table = self.catalog.create_table(
             identifier=full_table_name,
             schema=schema,
+            partition_spec=partition_spec
         )
 
         iceberg_table.append(data)

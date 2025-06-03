@@ -6,7 +6,6 @@ from pyarrow import ipc, RecordBatchReader
 from logger_conf import logging_setup
 from services.query_engine import QueryEngineManager
 from utils.config_loader import load_config
-from utils.file_utils import FileBatchReader
 
 FLIGHT_PORT = 8816
 
@@ -47,11 +46,12 @@ class IcebergFlightServer(flight.FlightServerBase):
 
     def do_put(self, context, descriptor, reader, writer):
         table_name = descriptor.path[0].decode("utf-8")
+        partitions = [p.decode("utf-8") for p in descriptor.path[1:]] if len(descriptor.path) > 0 else []
         try:
             batches = list(reader)
             if not batches:
                 return
-            self.query_engine_manager.write(table_name, batches)
+            self.query_engine_manager.write(table_name, batches, partitions)
         except Exception as e:
             logger.error(f"Error in do_put for table {table_name}", e)
             raise flight.FlightInternalError(f"Internal error: {str(e)}")

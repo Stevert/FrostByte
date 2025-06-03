@@ -26,7 +26,7 @@ def run_writer(table_name: str, port: int, data=None):
             )
 
             writer, _ = client.do_put(
-                flight.FlightDescriptor.for_path(table_name.encode()),
+                flight.FlightDescriptor.for_path(table_name.encode(), "id"),
                 data.schema,
             )
             writer.write_table(data)

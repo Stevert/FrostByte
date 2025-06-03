@@ -22,12 +22,12 @@ class QueryEngineManager:
     def execute_and_save(self, query) -> List[str]:
         return self.engine.query_and_write(query, self.result_path)
 
-    def write(self, table_name: str, flight_chunk: List[FlightStreamChunk]):
+    def write(self, table_name: str, flight_chunk: List[FlightStreamChunk], partitions: List[str]):
         batches = [chunk.data for chunk in flight_chunk]
         write_data = pa.Table.from_batches(batches)
         if table_name not in self.engine.tables:
             logger.info(f"Creating table: {table_name}")
-            self.engine.create_table(table_name, write_data)
+            self.engine.create_table(table_name, write_data, partitions)
         else:
             logger.info(f"Inserting into table: {table_name}")
             self.engine.insert(table_name, write_data)
